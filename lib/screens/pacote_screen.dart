@@ -52,6 +52,11 @@ class _PacoteScreenState extends State<PacoteScreen> {
   /// Carta esta voando pra fora da tela (trava novos arrastos).
   bool _saindo = false;
 
+  /// Ids das cartas deste pacote que ainda nao estavam na colecao.
+  /// Quem descobre isso e o guardarPacote, que olha a colecao antes de
+  /// gravar -- depois de gravar, toda carta do pacote ja existe.
+  Set<String> _novas = {};
+
   @override
   void initState() {
     super.initState();
@@ -60,7 +65,7 @@ class _PacoteScreenState extends State<PacoteScreen> {
 
   Future<List<Carta>> _abrirPacote() async {
     final cartas = await _api.abrirPacote(); // <- API TCGdex
-    await _colecao.guardarPacote(cartas); // <- Firestore
+    _novas = await _colecao.guardarPacote(cartas); // <- Firestore
 
     // Baixa as 5 artes AGORA, todas em paralelo, enquanto a tela ainda
     // mostra "Rasgando o plastico...".
@@ -104,6 +109,7 @@ class _PacoteScreenState extends State<PacoteScreen> {
   void _outroPacote() {
     setState(() {
       _pacote = _abrirPacote();
+      _novas = {};
       _indice = 0;
       _terminou = false;
       _arrasto = Offset.zero;
@@ -200,7 +206,11 @@ class _PacoteScreenState extends State<PacoteScreen> {
           final cartas = snapshot.data!;
 
           return _terminou
-              ? _Resumo(cartas: cartas, aoAbrirOutro: _outroPacote)
+              ? _Resumo(
+                  cartas: cartas,
+                  novas: _novas,
+                  aoAbrirOutro: _outroPacote,
+                )
               : _revelacao(cartas);
         },
       ),
@@ -271,7 +281,12 @@ class _PacoteScreenState extends State<PacoteScreen> {
                               child: SizedBox(
                                 width: largura,
                                 height: altura,
-                                child: _Frente(carta: cartas[_indice + 1]),
+                                child: _Frente(
+                                  carta: cartas[_indice + 1],
+                                  nova: _novas.contains(
+                                    cartas[_indice + 1].id,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
@@ -280,6 +295,7 @@ class _PacoteScreenState extends State<PacoteScreen> {
                       // A carta da vez, essa sim arrastavel.
                       _CartaArrastavel(
                         carta: carta,
+                        nova: _novas.contains(carta.id),
                         tamanho: tamanho,
                         deslocamento: _arrasto,
                         colado: _arrastando,
@@ -363,6 +379,7 @@ class _PacoteScreenState extends State<PacoteScreen> {
 class _CartaArrastavel extends StatelessWidget {
   const _CartaArrastavel({
     required this.carta,
+    required this.nova,
     required this.tamanho,
     required this.deslocamento,
     required this.colado,
@@ -372,6 +389,10 @@ class _CartaArrastavel extends StatelessWidget {
   });
 
   final Carta carta;
+
+  /// Repassado pro _Frente, que desenha o selo "NOVA".
+  final bool nova;
+
   final Size tamanho;
   final Offset deslocamento;
 
@@ -405,7 +426,11 @@ class _CartaArrastavel extends StatelessWidget {
         // animacao suave em vez de aparecer seca.
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 300),
-          child: _Frente(key: ValueKey('frente-${carta.id}'), carta: carta),
+          child: _Frente(
+            key: ValueKey('frente-${carta.id}'),
+            carta: carta,
+            nova: nova,
+          ),
         ),
       ),
     );
@@ -446,9 +471,20 @@ class _Bolinhas extends StatelessWidget {
 
 /// Carta virada pra cima, mostrando a arte que veio da TCGdex.
 class _Frente extends StatelessWidget {
-  const _Frente({super.key, required this.carta});
+  const _Frente({
+    super.key,
+    required this.carta,
+    this.nova = false,
+    this.seloPequeno = false,
+  });
 
   final Carta carta;
+
+  /// Carta que ainda nao estava na colecao: ganha o selo "NOVA".
+  final bool nova;
+
+  /// No resumo as cartas sao bem menores, entao o selo encolhe junto.
+  final bool seloPequeno;
 
   @override
   Widget build(BuildContext context) {
@@ -472,9 +508,72 @@ class _Frente extends StatelessWidget {
                 ),
               ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: ImagemCarta(url: carta.imagemGrande, nome: carta.nome),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: ImagemCarta(url: carta.imagemGrande, nome: carta.nome),
+          ),
+          if (nova)
+            Positioned(
+              top: seloPequeno ? 6 : 10,
+              left: seloPequeno ? 6 : 10,
+              child: _SeloNova(pequeno: seloPequeno),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// O selo "NOVA" no canto da carta.
+///
+/// Verde de proposito: o vermelho e o dourado do app ja falam de
+/// raridade, e "nova" e outra coisa -- uma carta comum pode ser novidade
+/// e uma rara pode ser repetida.
+class _SeloNova extends StatelessWidget {
+  const _SeloNova({this.pequeno = false});
+
+  final bool pequeno;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: pequeno ? 6 : 10,
+        vertical: pequeno ? 3 : 5,
+      ),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2E7D32),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black38,
+            blurRadius: 6,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.auto_awesome,
+            size: pequeno ? 9 : 12,
+            color: Colors.white,
+          ),
+          SizedBox(width: pequeno ? 3 : 5),
+          Text(
+            'NOVA',
+            style: TextStyle(
+              fontSize: pequeno ? 8 : 11,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -482,20 +581,49 @@ class _Frente extends StatelessWidget {
 
 /// Tela do fim: as 5 cartas do pacote juntas.
 class _Resumo extends StatelessWidget {
-  const _Resumo({required this.cartas, required this.aoAbrirOutro});
+  const _Resumo({
+    required this.cartas,
+    required this.novas,
+    required this.aoAbrirOutro,
+  });
 
   final List<Carta> cartas;
+
+  /// Ids das cartas do pacote que entraram na colecao agora.
+  final Set<String> novas;
+
   final VoidCallback aoAbrirOutro;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        const Padding(
-          padding: EdgeInsets.all(16),
-          child: Text(
-            'Seu pacote',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+          child: Column(
+            children: [
+              const Text(
+                'Seu pacote',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                switch (novas.length) {
+                  0 => 'Nenhuma carta nova desta vez',
+                  1 => '1 carta nova',
+                  _ => '${novas.length} cartas novas',
+                },
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: novas.isEmpty
+                      ? FontWeight.normal
+                      : FontWeight.bold,
+                  color: novas.isEmpty
+                      ? const Color(0xFF9FB7CB)
+                      : const Color(0xFF2E7D32),
+                ),
+              ),
+            ],
           ),
         ),
         Expanded(
@@ -534,7 +662,11 @@ class _Resumo extends StatelessWidget {
                         SizedBox(
                           width: largura,
                           height: largura / _proporcaoCarta,
-                          child: _Frente(carta: carta),
+                          child: _Frente(
+                            carta: carta,
+                            nova: novas.contains(carta.id),
+                            seloPequeno: true,
+                          ),
                         ),
                     ],
                   ),

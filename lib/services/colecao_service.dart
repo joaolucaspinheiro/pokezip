@@ -17,8 +17,22 @@ class ColecaoService {
   CollectionReference<Map<String, dynamic>> get _cartas =>
       _db.collection('colecoes').doc(_uid).collection('cartas');
 
-  /// Salva as 5 cartas do pacote de uma vez so.
-  Future<void> guardarPacote(List<Carta> pacote) async {
+  /// Salva as 5 cartas do pacote de uma vez so e devolve os ids das que
+  /// ainda NAO estavam na colecao -- e o que a tela usa pro selo "NOVA".
+  ///
+  /// A leitura precisa vir ANTES do lote: depois do increment toda carta
+  /// do pacote existe na colecao, e nao daria mais pra saber qual delas
+  /// era novidade.
+  Future<Set<String>> guardarPacote(List<Carta> pacote) async {
+    final atuais = await Future.wait(
+      pacote.map((carta) => _cartas.doc(carta.id).get()),
+    );
+
+    final novas = <String>{
+      for (var i = 0; i < pacote.length; i++)
+        if (!atuais[i].exists) pacote[i].id,
+    };
+
     final lote = _db.batch();
 
     for (final carta in pacote) {
@@ -32,6 +46,8 @@ class ColecaoService {
     }
 
     await lote.commit();
+
+    return novas;
   }
 
   /// Acompanha a colecao em tempo real: qualquer carta nova que entrar

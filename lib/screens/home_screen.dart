@@ -64,16 +64,28 @@ class HomeScreen extends StatelessWidget {
                 StreamBuilder<List<Carta>>(
                   stream: colecao.assistirColecao(),
                   builder: (context, snapshot) {
+                    // Sem este if, um erro de leitura do Firestore cairia
+                    // no "?? []" abaixo e a tela mostraria "0 cartas" --
+                    // como se a colecao tivesse sido perdida.
+                    if (snapshot.hasError) {
+                      return const _PainelErro();
+                    }
+
+                    // Enquanto o primeiro snapshot nao chega, mostra "–"
+                    // em vez de zero, que daria o mesmo susto por um
+                    // instante.
+                    final carregando =
+                        snapshot.connectionState == ConnectionState.waiting;
                     final cartas = snapshot.data ?? [];
-                    final diferentes = cartas.length;
-                    final total = cartas.fold<int>(
-                      0,
-                      (soma, c) => soma + c.quantidade,
-                    );
 
                     return _PainelEstatisticas(
-                      diferentes: diferentes,
-                      total: total,
+                      diferentes: carregando ? null : cartas.length,
+                      total: carregando
+                          ? null
+                          : cartas.fold<int>(
+                              0,
+                              (soma, c) => soma + c.quantidade,
+                            ),
                     );
                   },
                 ),
@@ -123,8 +135,9 @@ class HomeScreen extends StatelessWidget {
 class _PainelEstatisticas extends StatelessWidget {
   const _PainelEstatisticas({required this.diferentes, required this.total});
 
-  final int diferentes;
-  final int total;
+  /// Nulo enquanto a colecao ainda esta carregando.
+  final int? diferentes;
+  final int? total;
 
   @override
   Widget build(BuildContext context) {
@@ -140,7 +153,7 @@ class _PainelEstatisticas extends StatelessWidget {
           Expanded(
             child: _Numero(
               icone: Icons.collections_bookmark,
-              valor: '$diferentes',
+              valor: diferentes?.toString() ?? '–',
               rotulo: 'diferentes',
             ),
           ),
@@ -148,8 +161,40 @@ class _PainelEstatisticas extends StatelessWidget {
           Expanded(
             child: _Numero(
               icone: Icons.style,
-              valor: '$total',
+              valor: total?.toString() ?? '–',
               rotulo: 'no total',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Ocupa o lugar dos numeros quando a colecao nao pode ser lida.
+///
+/// Existe pra tela nunca afirmar "0 cartas" por causa de uma falha de
+/// conexao -- quem ja abriu pacotes acharia que perdeu tudo.
+class _PainelErro extends StatelessWidget {
+  const _PainelErro();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF3CD),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFF2E2B0)),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.cloud_off, size: 20, color: Color(0xFF8A6D1F)),
+          SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Não foi possível carregar sua coleção. Verifique sua conexão.',
+              style: TextStyle(fontSize: 13, color: Color(0xFF8A6D1F)),
             ),
           ),
         ],
