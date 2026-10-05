@@ -58,6 +58,15 @@ class _ColecaoScreenState extends State<ColecaoScreen> {
               // album na tela, que ainda serve de catalogo.
               final erroColecao = snapMinhas.hasError;
 
+              // Conta so as cartas DESTE set. O "minhas" traz a colecao
+              // inteira do usuario, de todos os sets, enquanto "todas" e
+              // de um set so -- usar minhas.length direto daria progresso
+              // acima de 100% e "faltam" negativo assim que existir um
+              // segundo set.
+              final tenhoNesteSet = todas
+                  .where((c) => minhas.containsKey(c.id))
+                  .length;
+
               final visiveis = _soFaltantes
                   ? todas.where((c) => (minhas[c.id] ?? 0) == 0).toList()
                   : todas;
@@ -65,10 +74,10 @@ class _ColecaoScreenState extends State<ColecaoScreen> {
               return Column(
                 children: [
                   if (erroColecao) const _FaixaAviso(),
-                  _Progresso(tenho: minhas.length, total: todas.length),
+                  _Progresso(tenho: tenhoNesteSet, total: todas.length),
                   _FiltroFaltantes(
                     ativo: _soFaltantes,
-                    faltam: todas.length - minhas.length,
+                    faltam: todas.length - tenhoNesteSet,
                     aoMudar: (valor) => setState(() => _soFaltantes = valor),
                   ),
                   Expanded(
