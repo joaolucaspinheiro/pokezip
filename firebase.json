@@ -1,0 +1,17 @@
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "flutter": {
+    "platforms": {
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "tcg-dex-lucas-2610",
+          "configurations": {
+            "web": "1:958051855730:web:ac49aa9e4731df677281eb"
+          }
+        }
+      }
+    }
+  }
+}

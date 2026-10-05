@@ -1,0 +1,15 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Cada usuario so le e escreve a PROPRIA colecao de cartas:
+    //   colecoes/{uid}/cartas/{idDaCarta}
+    // (e o caminho usado em lib/services/colecao_service.dart)
+    match /colecoes/{uid}/cartas/{cartaId} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Todo o resto fica bloqueado.
+  }
+}
