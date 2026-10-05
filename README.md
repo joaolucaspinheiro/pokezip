@@ -6,6 +6,16 @@ que ficam salvas na conta de quem abriu.
 
 Atividade individual — Flutter integrado a **Firebase** e a uma **API externa**.
 
+## Vídeo demonstrativo
+
+▶ **[Assistir à demonstração](https://drive.google.com/file/d/1q8O0qgJ72a9q6jhEn9UNzVPIso_YE_E5/view?usp=sharing)** (Google Drive)
+
+Mostra o sistema completo — login, abertura de pacote e coleção — e os pontos do
+código onde cada API é chamada.
+
+> O arquivo não está versionado aqui: tem 223 MB, e o GitHub recusa arquivos acima
+> de 100 MB no `push`. Por isso o vídeo fica hospedado no Drive, com o link acima.
+
 ## As duas APIs
 
 | API | Para que serve no app |
